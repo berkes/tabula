@@ -13,10 +13,22 @@ pub enum AccountCommand {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AccountEvent {
-    AccountOpened { account_id: String },
-    AccountClosed { account_id: String },
-    DepositedMoney { amount: f64, currency: String, balance: f64 },
-    WithdrewMoney { amount: f64, currency: String, balance: f64 },
+    AccountOpened {
+        account_id: String,
+    },
+    AccountClosed {
+        account_id: String,
+    },
+    DepositedMoney {
+        amount: f64,
+        currency: String,
+        balance: f64, // TODO: events should best not carry global state
+    },
+    WithdrewMoney {
+        amount: f64,
+        currency: String,
+        balance: f64,
+    },
 }
 
 impl DomainEvent for AccountEvent {
@@ -35,17 +47,14 @@ impl DomainEvent for AccountEvent {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AccountError(String);
-
+impl std::error::Error for AccountError {}
 impl Display for AccountError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
-
-impl std::error::Error for AccountError {}
-
 impl From<&str> for AccountError {
     fn from(message: &str) -> Self {
         AccountError(message.to_string())
@@ -89,6 +98,17 @@ impl Aggregate for Account {
                     balance,
                 }])
             }
+            AccountCommand::WithdrawMoney { amount, currency } => {
+                let balance = self.balance - amount;
+                if balance < 0_f64 {
+                    return Err(AccountError::from("funds not available"));
+                }
+                Ok(vec![AccountEvent::WithdrewMoney {
+                    amount,
+                    currency,
+                    balance,
+                }])
+            }
             _ => Ok(vec![]),
         }
     }
@@ -97,11 +117,19 @@ impl Aggregate for Account {
         match event {
             AccountEvent::AccountOpened { .. } => self.opened = true,
             AccountEvent::AccountClosed { .. } => self.opened = false,
-            AccountEvent::DepositedMoney { amount: _, currency: _, balance } => {
+            AccountEvent::DepositedMoney {
+                amount: _,
+                currency: _,
+                balance,
+            } => {
                 self.balance = balance;
             }
 
-            AccountEvent::WithdrewMoney { amount: _, currency: _, balance } => {
+            AccountEvent::WithdrewMoney {
+                amount: _,
+                currency: _,
+                balance,
+            } => {
                 self.balance = balance;
             }
         }
@@ -139,12 +167,56 @@ mod aggregate_tests {
 
     #[test]
     fn test_deposit_money_with_balance() {
-        let previous = AccountEvent::DepositedMoney { amount: 200.0, balance: 200.0, currency: "EUR".to_string() };
-        let expected = AccountEvent::DepositedMoney { amount: 200.0, balance: 400.0, currency: "EUR".to_string() };
+        let previous = AccountEvent::DepositedMoney {
+            amount: 200.0,
+            balance: 200.0,
+            currency: "EUR".to_string(),
+        };
+        let expected = AccountEvent::DepositedMoney {
+            amount: 200.0,
+            balance: 400.0,
+            currency: "EUR".to_string(),
+        };
 
         AccountTestFramework::with(AccountServices)
             .given(vec![previous])
-            .when(DepositMoney{ amount: 200.0, currency: "EUR".to_string() })
+            .when(DepositMoney {
+                amount: 200.0,
+                currency: "EUR".to_string(),
+            })
             .then_expect_events(vec![expected]);
+    }
+
+    #[test]
+    fn test_withdraw_money() {
+        let previous = AccountEvent::DepositedMoney {
+            amount: 200.0,
+            balance: 200.0,
+            currency: "EUR".to_string(),
+        };
+        let expected = AccountEvent::WithdrewMoney {
+            amount: 100.0,
+            balance: 100.0,
+            currency: "EUR".to_string(),
+        };
+
+        AccountTestFramework::with(AccountServices)
+            .given(vec![previous])
+            .when(AccountCommand::WithdrawMoney {
+                amount: 100.0,
+                currency: "EUR".to_string(),
+            })
+            .then_expect_events(vec![expected]);
+    }
+
+    #[test]
+    fn test_withdraw_money_funds_not_available() {
+        AccountTestFramework::with(AccountServices)
+            .given_no_previous_events()
+            .when(AccountCommand::WithdrawMoney {
+                amount: 200.0,
+                currency: "EUR".to_string(),
+            })
+            .then_expect_error(AccountError("funds not available".to_string()));
     }
 }
