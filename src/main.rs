@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use async_trait::async_trait;
-use cqrs_es::{Aggregate, DomainEvent};
+use cqrs_es::{Aggregate, DomainEvent, EventEnvelope, Query};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -9,6 +9,19 @@ pub enum AccountCommand {
     OpenAccount { account_id: String },
     DepositMoney { amount: f64, currency: String },
     WithdrawMoney { amount: f64, currency: String },
+}
+
+pub struct SimpleLoggingQuery {}
+#[async_trait]
+impl Query<Account> for SimpleLoggingQuery {
+    async fn dispatch(&self, aggregate_id: &str, events: &[EventEnvelope<Account>]) {
+        for event in events {
+           println!(
+                "{}-{}\n#{:#?}",
+                aggregate_id, &event.sequence, &event.payload
+            )
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -22,7 +35,7 @@ pub enum AccountEvent {
     DepositedMoney {
         amount: f64,
         currency: String,
-        balance: f64, // TODO: events should best not carry global state
+        balance: f64,
     },
     WithdrewMoney {
         amount: f64,
@@ -64,10 +77,10 @@ impl From<&str> for AccountError {
 pub struct AccountServices;
 
 impl AccountServices {}
-pub struct AtmError;
 
 #[derive(Serialize, Default, Deserialize)]
 pub struct Account {
+    account_id: String,
     opened: bool,
     // this is a floating point for our example, don't do this IRL
     balance: f64,
@@ -90,6 +103,9 @@ impl Aggregate for Account {
         _services: &Self::Services,
     ) -> Result<Vec<Self::Event>, Self::Error> {
         match command {
+            AccountCommand::OpenAccount { account_id } => {
+                Ok(vec![AccountEvent::AccountOpened { account_id }])
+            }
             AccountCommand::DepositMoney { amount, currency } => {
                 let balance = self.balance + amount;
                 Ok(vec![AccountEvent::DepositedMoney {
@@ -109,13 +125,15 @@ impl Aggregate for Account {
                     balance,
                 }])
             }
-            _ => Ok(vec![]),
         }
     }
 
     fn apply(&mut self, event: Self::Event) {
         match event {
-            AccountEvent::AccountOpened { .. } => self.opened = true,
+            AccountEvent::AccountOpened { account_id } => {
+                self.opened = true;
+                self.account_id = account_id;
+            }
             AccountEvent::AccountClosed { .. } => self.opened = false,
             AccountEvent::DepositedMoney {
                 amount: _,
@@ -144,7 +162,7 @@ fn main() {
 mod aggregate_tests {
     use super::*;
     use crate::AccountCommand::DepositMoney;
-    use cqrs_es::test::TestFramework;
+    use cqrs_es::{mem_store::MemStore, test::TestFramework, CqrsFramework};
 
     type AccountTestFramework = TestFramework<Account>;
 
@@ -218,5 +236,58 @@ mod aggregate_tests {
                 currency: "EUR".to_string(),
             })
             .then_expect_error(AccountError("funds not available".to_string()));
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_event_store() {
+        let event_store = MemStore::<Account>::default();
+        let query = SimpleLoggingQuery {};
+        let cqrs = CqrsFramework::new(event_store, vec![Box::new(query)], AccountServices);
+
+        let aggregate_id = "aggregate-instance-A";
+
+        // open account
+        cqrs.execute(
+            aggregate_id,
+            AccountCommand::OpenAccount {
+                account_id: "LEET0 1337".to_string()
+            },
+        )
+        .await
+        .unwrap();
+
+        // deposit $1000
+        cqrs.execute(
+            aggregate_id,
+            AccountCommand::DepositMoney {
+                amount: 1000_f64,
+                currency: "EUR".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // withdraw $236.15
+        cqrs.execute(
+            aggregate_id,
+            AccountCommand::WithdrawMoney {
+                amount: 236.15,
+                currency: "EUR".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // overdraw.
+        cqrs.execute(
+            aggregate_id,
+            AccountCommand::WithdrawMoney {
+                amount: 770.00,
+                currency: "EUR".to_string(),
+            },
+        )
+        .await
+        .unwrap();
     }
 }
