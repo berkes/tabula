@@ -1,6 +1,6 @@
-use account::account_aggregate::Account;
+use account::aggregate::Account;
 use async_trait::async_trait;
-use cqrs_es::{Query, EventEnvelope};
+use cqrs_es::{EventEnvelope, Query};
 
 mod account;
 
@@ -21,84 +21,16 @@ fn main() {
 }
 
 #[cfg(test)]
-mod aggregate_tests {
-    use crate::account::{account_command::AccountCommand::{DepositMoney, self}, account_services::AccountServices, account_event::AccountEvent, account_errors::AccountError};
-    use super::*;
-    use cqrs_es::{mem_store::MemStore, test::TestFramework, CqrsFramework};
+mod main_test {
+    use cqrs_es::{mem_store::MemStore, CqrsFramework};
 
-    type AccountTestFramework = TestFramework<Account>;
-
-    #[test]
-    fn test_deposit_money() {
-        let expected = AccountEvent::DepositedMoney {
-            amount: 200.0,
-            currency: "EUR".to_string(),
-            balance: 200.0,
-        };
-
-        AccountTestFramework::with(AccountServices)
-            .given_no_previous_events()
-            .when(DepositMoney {
-                amount: 200.0,
-                currency: "EUR".to_string(),
-            })
-            .then_expect_events(vec![expected]);
-    }
-
-    #[test]
-    fn test_deposit_money_with_balance() {
-        let previous = AccountEvent::DepositedMoney {
-            amount: 200.0,
-            balance: 200.0,
-            currency: "EUR".to_string(),
-        };
-        let expected = AccountEvent::DepositedMoney {
-            amount: 200.0,
-            balance: 400.0,
-            currency: "EUR".to_string(),
-        };
-
-        AccountTestFramework::with(AccountServices)
-            .given(vec![previous])
-            .when(DepositMoney {
-                amount: 200.0,
-                currency: "EUR".to_string(),
-            })
-            .then_expect_events(vec![expected]);
-    }
-
-    #[test]
-    fn test_withdraw_money() {
-        let previous = AccountEvent::DepositedMoney {
-            amount: 200.0,
-            balance: 200.0,
-            currency: "EUR".to_string(),
-        };
-        let expected = AccountEvent::WithdrewMoney {
-            amount: 100.0,
-            balance: 100.0,
-            currency: "EUR".to_string(),
-        };
-
-        AccountTestFramework::with(AccountServices)
-            .given(vec![previous])
-            .when(AccountCommand::WithdrawMoney {
-                amount: 100.0,
-                currency: "EUR".to_string(),
-            })
-            .then_expect_events(vec![expected]);
-    }
-
-    #[test]
-    fn test_withdraw_money_funds_not_available() {
-        AccountTestFramework::with(AccountServices)
-            .given_no_previous_events()
-            .when(AccountCommand::WithdrawMoney {
-                amount: 200.0,
-                currency: "EUR".to_string(),
-            })
-            .then_expect_error(AccountError::from("funds not available"));
-    }
+    use crate::{
+        account::{
+            aggregate::Account, command::Command as AccountCommand,
+            services::Services as AccountServices,
+        },
+        SimpleLoggingQuery,
+    };
 
     #[tokio::test]
     #[should_panic]

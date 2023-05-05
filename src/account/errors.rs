@@ -1,15 +1,15 @@
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
-pub struct AccountError(String);
-impl std::error::Error for AccountError {}
-impl Display for AccountError {
+pub struct Error(String);
+impl std::error::Error for Error {}
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
-impl From<&str> for AccountError {
+impl From<&str> for Error {
     fn from(message: &str) -> Self {
-        AccountError(message.to_string())
+        Error(message.to_string())
     }
 }

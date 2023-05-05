@@ -2,7 +2,7 @@ use cqrs_es::DomainEvent;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AccountEvent {
+pub enum Event {
     AccountOpened {
         account_id: String,
     },
@@ -21,13 +21,13 @@ pub enum AccountEvent {
     },
 }
 
-impl DomainEvent for AccountEvent {
+impl DomainEvent for Event {
     fn event_type(&self) -> String {
         let event_type: &str = match self {
-            AccountEvent::AccountOpened { .. } => "AccountOpened",
-            AccountEvent::AccountClosed { .. } => "AccountClosed",
-            AccountEvent::DepositedMoney { .. } => "CustomerDepositedMoney",
-            AccountEvent::WithdrewMoney { .. } => "CustomerWithdrewCash",
+            Event::AccountOpened { .. } => "AccountOpened",
+            Event::AccountClosed { .. } => "AccountClosed",
+            Event::DepositedMoney { .. } => "CustomerDepositedMoney",
+            Event::WithdrewMoney { .. } => "CustomerWithdrewCash",
         };
         event_type.to_string()
     }

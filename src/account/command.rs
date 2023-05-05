@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub enum AccountCommand {
+pub enum Command {
     OpenAccount { account_id: String },
     DepositMoney { amount: f64, currency: String },
     WithdrawMoney { amount: f64, currency: String },
