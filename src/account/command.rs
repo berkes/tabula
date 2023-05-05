@@ -6,4 +6,3 @@ pub enum Command {
     DepositMoney { amount: f64, currency: String },
     WithdrawMoney { amount: f64, currency: String },
 }
-

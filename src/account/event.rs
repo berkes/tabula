@@ -1,5 +1,5 @@
 use cqrs_es::DomainEvent;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Event {
@@ -36,4 +36,3 @@ impl DomainEvent for Event {
         "1.0".to_string()
     }
 }
-
