@@ -1,167 +1,29 @@
-use std::fmt::Display;
-
+use account::account_aggregate::Account;
 use async_trait::async_trait;
-use cqrs_es::{Aggregate, DomainEvent, EventEnvelope, Query};
-use serde::{Deserialize, Serialize};
+use cqrs_es::{Query, EventEnvelope};
 
-#[derive(Debug, Deserialize)]
-pub enum AccountCommand {
-    OpenAccount { account_id: String },
-    DepositMoney { amount: f64, currency: String },
-    WithdrawMoney { amount: f64, currency: String },
-}
+mod account;
 
 pub struct SimpleLoggingQuery {}
 #[async_trait]
 impl Query<Account> for SimpleLoggingQuery {
     async fn dispatch(&self, aggregate_id: &str, events: &[EventEnvelope<Account>]) {
         for event in events {
-           println!(
+            println!(
                 "{}-{}\n#{:#?}",
                 aggregate_id, &event.sequence, &event.payload
             )
         }
     }
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AccountEvent {
-    AccountOpened {
-        account_id: String,
-    },
-    AccountClosed {
-        account_id: String,
-    },
-    DepositedMoney {
-        amount: f64,
-        currency: String,
-        balance: f64,
-    },
-    WithdrewMoney {
-        amount: f64,
-        currency: String,
-        balance: f64,
-    },
-}
-
-impl DomainEvent for AccountEvent {
-    fn event_type(&self) -> String {
-        let event_type: &str = match self {
-            AccountEvent::AccountOpened { .. } => "AccountOpened",
-            AccountEvent::AccountClosed { .. } => "AccountClosed",
-            AccountEvent::DepositedMoney { .. } => "CustomerDepositedMoney",
-            AccountEvent::WithdrewMoney { .. } => "CustomerWithdrewCash",
-        };
-        event_type.to_string()
-    }
-
-    fn event_version(&self) -> String {
-        "1.0".to_string()
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct AccountError(String);
-impl std::error::Error for AccountError {}
-impl Display for AccountError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl From<&str> for AccountError {
-    fn from(message: &str) -> Self {
-        AccountError(message.to_string())
-    }
-}
-
-pub struct AccountServices;
-
-impl AccountServices {}
-
-#[derive(Serialize, Default, Deserialize)]
-pub struct Account {
-    account_id: String,
-    opened: bool,
-    // this is a floating point for our example, don't do this IRL
-    balance: f64,
-}
-
-#[async_trait]
-impl Aggregate for Account {
-    type Command = AccountCommand;
-    type Event = AccountEvent;
-    type Error = AccountError;
-    type Services = AccountServices;
-
-    fn aggregate_type() -> String {
-        "Account".to_string()
-    }
-
-    async fn handle(
-        &self,
-        command: Self::Command,
-        _services: &Self::Services,
-    ) -> Result<Vec<Self::Event>, Self::Error> {
-        match command {
-            AccountCommand::OpenAccount { account_id } => {
-                Ok(vec![AccountEvent::AccountOpened { account_id }])
-            }
-            AccountCommand::DepositMoney { amount, currency } => {
-                let balance = self.balance + amount;
-                Ok(vec![AccountEvent::DepositedMoney {
-                    amount,
-                    currency,
-                    balance,
-                }])
-            }
-            AccountCommand::WithdrawMoney { amount, currency } => {
-                let balance = self.balance - amount;
-                if balance < 0_f64 {
-                    return Err(AccountError::from("funds not available"));
-                }
-                Ok(vec![AccountEvent::WithdrewMoney {
-                    amount,
-                    currency,
-                    balance,
-                }])
-            }
-        }
-    }
-
-    fn apply(&mut self, event: Self::Event) {
-        match event {
-            AccountEvent::AccountOpened { account_id } => {
-                self.opened = true;
-                self.account_id = account_id;
-            }
-            AccountEvent::AccountClosed { .. } => self.opened = false,
-            AccountEvent::DepositedMoney {
-                amount: _,
-                currency: _,
-                balance,
-            } => {
-                self.balance = balance;
-            }
-
-            AccountEvent::WithdrewMoney {
-                amount: _,
-                currency: _,
-                balance,
-            } => {
-                self.balance = balance;
-            }
-        }
-    }
-}
-
 fn main() {
     println!("Hello, world!");
 }
 
 #[cfg(test)]
 mod aggregate_tests {
+    use crate::account::{account_command::AccountCommand::{DepositMoney, self}, account_services::AccountServices, account_event::AccountEvent, account_errors::AccountError};
     use super::*;
-    use crate::AccountCommand::DepositMoney;
     use cqrs_es::{mem_store::MemStore, test::TestFramework, CqrsFramework};
 
     type AccountTestFramework = TestFramework<Account>;
@@ -235,7 +97,7 @@ mod aggregate_tests {
                 amount: 200.0,
                 currency: "EUR".to_string(),
             })
-            .then_expect_error(AccountError("funds not available".to_string()));
+            .then_expect_error(AccountError::from("funds not available"));
     }
 
     #[tokio::test]
@@ -251,7 +113,7 @@ mod aggregate_tests {
         cqrs.execute(
             aggregate_id,
             AccountCommand::OpenAccount {
-                account_id: "LEET0 1337".to_string()
+                account_id: "LEET0 1337".to_string(),
             },
         )
         .await
