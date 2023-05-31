@@ -1,13 +1,13 @@
 use account::aggregate::Account;
 use async_trait::async_trait;
 use cqrs_es::{EventEnvelope, Query};
-use ledger_parser::{Transaction, LedgerItem};
-use std::fs;
+use ledger_parser::{LedgerItem, Transaction};
+use std::{fs::File, io::Read, panic};
 
 mod account;
 
 fn main() {
-    let ledger_content = fs::read_to_string("/home/ber/tmp/test.ledger").unwrap();
+    let ledger_content = read_file("/home/ber/tmp/test.ledger");
     let ledger = ledger_parser::parse(&ledger_content).unwrap();
     let summary: Vec<Transaction> = ledger
         .items
@@ -23,19 +23,43 @@ fn main() {
 
     let vat_summary = filter_transactions(summary, "btw");
 
-    for line in vat_summary  {
+    for line in vat_summary {
         println!("{}", line);
     }
 }
 
-fn filter_transactions(transactions: Vec<Transaction>, posting_account_contains: &str) -> Vec<Transaction> {
-    transactions.into_iter().filter_map(|transaction| -> Option<Transaction> {
-        if transaction.postings.iter().any(|posting| posting.account.contains(posting_account_contains)) {
-            Some(transaction)
-        } else {
-            None
-        }
-    }).collect()
+fn read_file(path: &str) -> String {
+    let mut file = match File::open(path) {
+        Err(why) => panic!("Couldn't open {}: {}", path, why),
+        Ok(file) => file,
+    };
+
+    let mut s = String::new();
+    match file.read_to_string(&mut s) {
+        Err(why) => panic!("Couldn't read {}: {}", path, why),
+        Ok(_) => {}
+    }
+    return s;
+}
+
+fn filter_transactions(
+    transactions: Vec<Transaction>,
+    posting_account_contains: &str,
+) -> Vec<Transaction> {
+    transactions
+        .into_iter()
+        .filter_map(|transaction| -> Option<Transaction> {
+            if transaction
+                .postings
+                .iter()
+                .any(|posting| posting.account.contains(posting_account_contains))
+            {
+                Some(transaction)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 pub struct SimpleLoggingQuery {}
