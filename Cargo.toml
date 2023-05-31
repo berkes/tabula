@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.68"
 cqrs-es = "0.4.8"
-ledger-parser = "5.1.1"
+beancount-parser = { version = "0.2.0", git = "https://github.com/twilco/beancount.git" }
+beancount-core = { version = "0.2.0", git = "https://github.com/twilco/beancount.git" }
+beancount-render = { version = "0.1.0", git = "https://github.com/twilco/beancount.git" }
 serde = { version = "1.0", features = ["derive"]}
 tokio = { version = "1.27.0", features = ["full"] }

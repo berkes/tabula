@@ -2,12 +2,7 @@ use async_trait::async_trait;
 use cqrs_es::Aggregate;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    command::Command,
-    errors::Error,
-    event::Event,
-    services::Services,
-};
+use super::{command::Command, errors::Error, event::Event, services::Services};
 
 #[derive(Serialize, Default, Deserialize)]
 pub struct Account {
@@ -34,9 +29,7 @@ impl Aggregate for Account {
         _services: &Self::Services,
     ) -> Result<Vec<Self::Event>, Self::Error> {
         match command {
-            Command::OpenAccount { account_id } => {
-                Ok(vec![Event::AccountOpened { account_id }])
-            }
+            Command::OpenAccount { account_id } => Ok(vec![Event::AccountOpened { account_id }]),
             Command::DepositMoney { amount, currency } => {
                 let balance = self.balance + amount;
                 Ok(vec![Event::DepositedMoney {
@@ -87,13 +80,11 @@ impl Aggregate for Account {
 
 #[cfg(test)]
 mod aggregate_tests {
-    use crate::account::{
-        command::Command as AccountCommand,
-        services::Services as AccountServices,
-        event::Event as AccountEvent,
-        errors::Error as AccountError
-    };
     use super::*;
+    use crate::account::{
+        command::Command as AccountCommand, errors::Error as AccountError,
+        event::Event as AccountEvent, services::Services as AccountServices,
+    };
     use cqrs_es::test::TestFramework;
 
     type AccountTestFramework = TestFramework<Account>;
@@ -170,4 +161,3 @@ mod aggregate_tests {
             .then_expect_error(AccountError::from("funds not available"));
     }
 }
-

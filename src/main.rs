@@ -1,19 +1,26 @@
 use account::aggregate::Account;
 use async_trait::async_trait;
+use beancount_core::{
+    directives::{Directive, Transaction},
+    posting::Posting,
+    Ledger,
+};
+use beancount_parser::parse;
+use beancount_render::render;
 use cqrs_es::{EventEnvelope, Query};
-use ledger_parser::{LedgerItem, Transaction};
+use std::borrow::Cow;
 use std::{fs::File, io::Read, panic};
 
 mod account;
 
 fn main() {
-    let ledger_content = read_file("/home/ber/tmp/test.ledger");
-    let ledger = ledger_parser::parse(&ledger_content).unwrap();
-    let summary: Vec<Transaction> = ledger
-        .items
+    let ledger_content = read_file("/home/ber/tmp/test.beancount");
+    let ledger = parse(&ledger_content).unwrap();
+    let transactions: Vec<Transaction> = ledger
+        .directives
         .into_iter()
         .filter_map(|item| {
-            if let LedgerItem::Transaction(tx) = item {
+            if let Directive::Transaction(tx) = item {
                 Some(tx)
             } else {
                 None
@@ -21,11 +28,16 @@ fn main() {
         })
         .collect();
 
-    let vat_summary = filter_transactions(summary, "btw");
+    let directives = filter_transactions(transactions, "Omzetbelasting")
+        .into_iter()
+        .map(Directive::Transaction)
+        .collect();
+    let tax_report = Ledger { directives };
 
-    for line in vat_summary {
-        println!("{}", line);
-    }
+    let mut rendered = Vec::new();
+    render(&mut rendered, &tax_report).unwrap();
+
+    println!("{}", String::from_utf8(rendered).unwrap());
 }
 
 fn read_file(path: &str) -> String {
@@ -34,26 +46,27 @@ fn read_file(path: &str) -> String {
         Ok(file) => file,
     };
 
-    let mut s = String::new();
-    match file.read_to_string(&mut s) {
-        Err(why) => panic!("Couldn't read {}: {}", path, why),
-        Ok(_) => {}
+    let mut contents = String::new();
+    if let Err(why) = file.read_to_string(&mut contents) {
+        panic!("Couldn't read {}: {}", path, why)
     }
-    return s;
+    contents
 }
 
-fn filter_transactions(
-    transactions: Vec<Transaction>,
-    posting_account_contains: &str,
-) -> Vec<Transaction> {
+fn filter_transactions<'a>(
+    transactions: Vec<Transaction<'a>>,
+    posting_account_contains: &'a str,
+) -> Vec<Transaction<'a>> {
     transactions
         .into_iter()
         .filter_map(|transaction| -> Option<Transaction> {
-            if transaction
-                .postings
-                .iter()
-                .any(|posting| posting.account.contains(posting_account_contains))
-            {
+            let owned_postings: Vec<Posting> = transaction.postings.clone();
+            if owned_postings.into_iter().any(|posting| {
+                posting
+                    .account
+                    .parts
+                    .contains(&Cow::Borrowed(posting_account_contains))
+            }) {
                 Some(transaction)
             } else {
                 None
