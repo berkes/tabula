@@ -28,16 +28,32 @@ fn main() {
         })
         .collect();
 
-    let directives = filter_transactions(transactions, "Omzetbelasting")
+    report(&tax_ledger(transactions.clone()), "Tax report");
+    report(&invoices_ledger(transactions), "Invoices");
+}
+
+fn report(ledger: &Ledger, header: &str) {
+    let mut report = Vec::new();
+    render(&mut report, ledger).unwrap();
+
+    println!("=={:=<78}", format!(" {} ", header));
+    println!("{}", String::from_utf8(report).unwrap());
+}
+
+fn invoices_ledger(transactions: Vec<Transaction>) -> Ledger {
+    let directives = find_transactions_by_meta_key(transactions, "invoice_number")
         .into_iter()
         .map(Directive::Transaction)
         .collect();
-    let tax_report = Ledger { directives };
+    Ledger { directives }
+}
 
-    let mut rendered = Vec::new();
-    render(&mut rendered, &tax_report).unwrap();
-
-    println!("{}", String::from_utf8(rendered).unwrap());
+fn tax_ledger(transactions: Vec<Transaction>) -> Ledger {
+    let directives = find_transactions_by_account(transactions, "Omzetbelasting")
+        .into_iter()
+        .map(Directive::Transaction)
+        .collect();
+    Ledger { directives }
 }
 
 fn read_file(path: &str) -> String {
@@ -53,7 +69,22 @@ fn read_file(path: &str) -> String {
     contents
 }
 
-fn filter_transactions<'a>(
+fn find_transactions_by_meta_key<'a>(
+    transactions: Vec<Transaction<'a>>,
+    meta_key: &'a str,
+) -> Vec<Transaction<'a>> {
+    transactions
+        .into_iter()
+        .filter_map(|transaction| -> Option<Transaction> {
+            transaction
+                .meta
+                .contains_key(meta_key)
+                .then_some(transaction)
+        })
+        .collect()
+}
+
+fn find_transactions_by_account<'a>(
     transactions: Vec<Transaction<'a>>,
     posting_account_contains: &'a str,
 ) -> Vec<Transaction<'a>> {
