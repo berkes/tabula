@@ -1,6 +1,12 @@
-use beancount_core::{directives::Transaction, Date, Flag, Ledger, Posting, Account, AccountType::Assets, IncompleteAmount};
+use beancount_core::{
+    directives::Transaction,
+    metadata::{Meta, MetaValue},
+    Account,
+    AccountType::Assets,
+    Date, Flag, IncompleteAmount, Ledger, Posting,
+};
 use beancount_render::render;
-use std::{fs::OpenOptions, io::Write, borrow::Cow};
+use std::{borrow::Cow, fs::OpenOptions, io::Write};
 
 mod cli;
 
@@ -29,13 +35,14 @@ fn main() {
             .account(accts_recievable)
             .units(amt.clone())
             .build(),
-        Posting::builder()
-            .account(work)
-            .units(amt)
-            .build()
+        Posting::builder().account(work).units(amt).build(),
     ];
+
+    let meta = Meta::from([(Cow::Borrowed("invoice_number"), MetaValue::Number(1.into()))]);
+
     let tx = Transaction::builder()
         .flag(Flag::Warning)
+        .meta(meta)
         .date(today)
         .narration("Invoice #1".into())
         .postings(postings)
