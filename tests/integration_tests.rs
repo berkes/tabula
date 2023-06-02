@@ -19,13 +19,14 @@ fn test_that_invoice_add_arrives_in_ledger() -> Result<(), Box<dyn std::error::E
 
     assert
         .success()
-        .stdout(predicate::str::contains("Invoice #1 created"));
+        .stdout(predicate::str::contains("Invoice #TBD created"));
 
     let today = Local::now().format("%F");
     ledger_file.assert(predicate::str::contains(format!(
-        "{} ! \"Invoice #{}",
-        today, 1
+        "{} ! \"Invoice #{}\"",
+        today, "TDB"
     )));
+    ledger_file.assert(predicate::str::contains(format!("invoice_number: {}", "TBD")));
 
     Ok(())
 }

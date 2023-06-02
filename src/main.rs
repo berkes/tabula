@@ -38,13 +38,18 @@ fn main() {
         Posting::builder().account(work).units(amt).build(),
     ];
 
-    let meta = Meta::from([(Cow::Borrowed("invoice_number"), MetaValue::Number(1.into()))]);
+    let invoice_number = "TBD";
+
+    let meta = Meta::from([(
+        Cow::Borrowed("invoice_number"),
+        MetaValue::Text(invoice_number.into()),
+    )]);
 
     let tx = Transaction::builder()
         .flag(Flag::Warning)
         .meta(meta)
         .date(today)
-        .narration("Invoice #1".into())
+        .narration(format!("Invoice #{}", invoice_number).into())
         .postings(postings)
         .build();
 
@@ -61,10 +66,7 @@ fn main() {
         .append(true)
         .open(path)
         .unwrap();
+    writeln!(file, "{}", ledger_file_contents).unwrap();
 
-    if let Err(e) = writeln!(file, "{}", ledger_file_contents) {
-        eprintln!("Couldn't write to file: {}", e);
-    }
-
-    println!("Invoice #1 created");
+    println!("Invoice #{} created", invoice_number);
 }
