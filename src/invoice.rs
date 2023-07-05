@@ -81,21 +81,3 @@ pub fn handle_build() -> String {
         today,
     )
 }
-
-type InvoiceNumber = String;
-
-fn next_invoice_number(ledger: Ledger) -> InvoiceNumber {
-    "1".to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_that_invoice_number_defaults_to_1() {
-        let ledger = Ledger { directives: vec![] };
-
-        assert_eq!("1", next_invoice_number(ledger));
-    }
-}
