@@ -73,7 +73,9 @@ fn test_that_invoice_list_shows_all_invoices() -> Result<(), Box<dyn std::error:
     assert
         .success()
         .stdout(predicate::str::contains("2023-001 2023-06-01 Invoice #1"))
-        .stdout(predicate::str::contains("2023-002 2023-06-02 Invoice #2"))
+        .stdout(predicate::str::contains(
+            "2023-002 2023-06-02 Invoice #2 due:2023-07-02",
+        ))
         .stdout(predicate::str::contains("TBD 2023-06-05 Invoice #TBD"));
 
     Ok(())

@@ -136,13 +136,34 @@ pub fn summarize_invoices(input: String) -> String {
         .into_iter()
         .map(|tx| {
             let invoice_number: InvoiceNumber = tx.meta.get("invoice_number").unwrap().into();
+            // Assign a due date if it exists and is a Date
+            let due_date = tx.meta.get("due").and_then(|v| match v {
+                MetaValue::Date(d) => Some(d),
+                _ => None,
+            });
 
-            format!("{} {} {}", invoice_number, tx.date, tx.narration)
+            format!(
+                "{} {} {}{}",
+                invoice_number,
+                tx.date,
+                tx.narration,
+                format_optional_k_v("due", due_date)
+            )
         })
         .collect::<Vec<String>>()
         .join("\n");
     // join the strings with newlines and return this string
     summary
+}
+
+fn format_optional_k_v<T>(key: &str, value: Option<T>) -> String
+where
+    T: fmt::Display,
+{
+    match value {
+        Some(v) => format!(" {}:{}", key, v),
+        None => "".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -163,6 +184,19 @@ mod tests {
 
         let expected_output = "42 2023-06-02 Invoice #42\n\
                                43 2023-06-02 Invoice #43";
+
+        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+    }
+
+    #[test]
+    fn test_handle_list_with_due_date() {
+        let input = "2023-06-02 ! \"Invoice #42\"\n\
+                     \tinvoice_number: 42\n\
+                     \tdue: 2023-07-02\n\
+                     \tAssets:AccountsReceivable\t1337 USD\n\
+                     \tIncome:Work\t1337 USD\n";
+
+        let expected_output = "42 2023-06-02 Invoice #42 due:2023-07-02";
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
     }
