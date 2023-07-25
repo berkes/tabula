@@ -1,7 +1,7 @@
-use assert_cmd::prelude::*; // Adds methods on commands
+use assert_cmd::Command; // Run programs
 use chrono::Local; // Allows to fetch local dates to match against
 use predicates::prelude::*; // Allows easier asssertions
-use std::process::Command; // Runs programs
+use std::{fs::File, io::Read}; // Runs programs
 
 #[test]
 fn test_that_invoice_add_arrives_in_ledger() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,6 +53,28 @@ fn test_that_invoice_build_generates_template_json() -> Result<(), Box<dyn std::
     let actual_json: serde_json::Value = serde_json::from_str(actual)?;
 
     assert_eq!(expected_json, actual_json);
+
+    Ok(())
+}
+
+#[test]
+fn test_that_invoice_list_shows_all_invoices() -> Result<(), Box<dyn std::error::Error>> {
+    // Open the fxiture and read its contents into a String
+    let mut file_content = String::new();
+    File::open("./tests/fixtures/invoices.beancount")?.read_to_string(&mut file_content)?;
+
+    let mut cmd = Command::cargo_bin("tabula")?;
+    let assert = cmd
+        .arg("invoices")
+        .arg("list")
+        .write_stdin(file_content)
+        .assert();
+
+    assert
+        .success()
+        .stdout(predicate::str::contains("2023-001 2023-06-01 Invoice #1"))
+        .stdout(predicate::str::contains("2023-002 2023-06-02 Invoice #2"))
+        .stdout(predicate::str::contains("TBD 2023-06-05 Invoice #TBD"));
 
     Ok(())
 }

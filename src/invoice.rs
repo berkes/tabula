@@ -95,6 +95,7 @@ pub fn handle_list() -> String {
     summarize_invoices(input)
 }
 
+#[derive(Debug)]
 struct InvoiceNumber(String);
 impl From<&MetaValue<'_>> for InvoiceNumber {
     fn from(mv: &MetaValue) -> Self {
@@ -162,6 +163,38 @@ mod tests {
 
         let expected_output = "42 2023-06-02 Invoice #42\n\
                                43 2023-06-02 Invoice #43";
+
+        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+    }
+
+    #[test]
+    fn test_handle_list_with_string_numbers() {
+        let input = "2023-06-02 ! \"Invoice #42\"\n\
+                     \tinvoice_number: \"2023-42\"\n\
+                     \tAssets:AccountsReceivable\t1337 USD\n\
+                     \tIncome:Work\t1337 USD\n\
+                     \n\
+                     2023-06-02 ! \"Invoice #TBD\"\n\
+                     \tinvoice_number: \"TBD\"\n\
+                     \tAssets:AccountsReceivable\t1338 USD\n\
+                     \tIncome:Work\t1338 USD\n";
+
+        let expected_output = "2023-42 2023-06-02 Invoice #42\n\
+                               TBD 2023-06-02 Invoice #TBD";
+
+        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+    }
+
+    // Edge case where we have a number that is not quoted but a valid formula. E.g. 2023-42 is
+    // 1981.
+    #[test]
+    fn test_handle_list_with_evald_numbers() {
+        let input = "2023-06-02 ! \"Invoice #42\"\n\
+                     \tinvoice_number: 2023-42\n\
+                     \tAssets:AccountsReceivable\t1337 USD\n\
+                     \tIncome:Work\t1338 USD\n";
+
+        let expected_output = "1981 2023-06-02 Invoice #42";
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
     }
