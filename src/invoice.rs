@@ -92,7 +92,8 @@ pub fn handle_list() -> String {
         .read_to_string(&mut input)
         .expect("To read input");
 
-    summarize_invoices(input)
+    let summary = summarize_invoices(input);
+    tabulate(summary)
 }
 
 #[derive(Debug)]
@@ -113,7 +114,7 @@ impl fmt::Display for InvoiceNumber {
     }
 }
 
-pub fn summarize_invoices(input: String) -> String {
+pub fn summarize_invoices(input: String) -> Vec<Vec<Option<String>>> {
     let ledger = parse(&input).unwrap();
     // keep only the directives that are transactions
     // keep only the transactions that have an invoice_number
@@ -132,8 +133,7 @@ pub fn summarize_invoices(input: String) -> String {
         .collect();
 
     // format their descriptions, dates, and invoice_numbers collect in a string
-    let summary: String = txs
-        .into_iter()
+    txs.into_iter()
         .map(|tx| {
             let invoice_number: InvoiceNumber = tx.meta.get("invoice_number").unwrap().into();
             // Assign a due date if it exists and is a Date
@@ -142,28 +142,31 @@ pub fn summarize_invoices(input: String) -> String {
                 _ => None,
             });
 
-            format!(
-                "{} {} {}{}",
-                invoice_number,
-                tx.date,
-                tx.narration,
-                format_optional_k_v("due", due_date)
-            )
+            vec![
+                Some(invoice_number.to_string()),
+                Some(tx.date.to_string()),
+                Some(tx.narration.to_string()),
+                due_date.map(|d| d.to_string()),
+            ]
         })
-        .collect::<Vec<String>>()
-        .join("\n");
-    // join the strings with newlines and return this string
-    summary
+        .collect::<Vec<Vec<Option<String>>>>()
 }
 
-fn format_optional_k_v<T>(key: &str, value: Option<T>) -> String
-where
-    T: fmt::Display,
-{
-    match value {
-        Some(v) => format!(" {}:{}", key, v),
-        None => "".to_string(),
+fn tabulate(input: Vec<Vec<Option<String>>>) -> String {
+    let mut output = String::new();
+    let max_columns = input.iter().map(|row| row.len()).max().unwrap_or(0);
+
+    for row in input {
+        for (i, col) in row.iter().enumerate() {
+            output.push_str(&format!("{}", col.as_ref().unwrap_or(&"".to_string())));
+            if i < max_columns - 1 {
+                output.push_str("\t");
+            }
+        }
+        output.push_str("\n");
     }
+
+    output
 }
 
 #[cfg(test)]
@@ -182,8 +185,20 @@ mod tests {
                      \tAssets:AccountsReceivable\t1338 USD\n\
                      \tIncome:Work\t1338 USD\n";
 
-        let expected_output = "42 2023-06-02 Invoice #42\n\
-                               43 2023-06-02 Invoice #43";
+        let expected_output = vec![
+            vec![
+                Some("42".to_string()),
+                Some("2023-06-02".to_string()),
+                Some("Invoice #42".to_string()),
+                None,
+            ],
+            vec![
+                Some("43".to_string()),
+                Some("2023-06-02".to_string()),
+                Some("Invoice #43".to_string()),
+                None,
+            ],
+        ];
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
     }
@@ -195,8 +210,12 @@ mod tests {
                      \tdue: 2023-07-02\n\
                      \tAssets:AccountsReceivable\t1337 USD\n\
                      \tIncome:Work\t1337 USD\n";
-
-        let expected_output = "42 2023-06-02 Invoice #42 due:2023-07-02";
+        let expected_output = vec![vec![
+            Some("42".to_string()),
+            Some("2023-06-02".to_string()),
+            Some("Invoice #42".to_string()),
+            Some("2023-07-02".to_string()),
+        ]];
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
     }
@@ -213,8 +232,20 @@ mod tests {
                      \tAssets:AccountsReceivable\t1338 USD\n\
                      \tIncome:Work\t1338 USD\n";
 
-        let expected_output = "2023-42 2023-06-02 Invoice #42\n\
-                               TBD 2023-06-02 Invoice #TBD";
+        let expected_output = vec![
+            vec![
+                Some("2023-42".to_string()),
+                Some("2023-06-02".to_string()),
+                Some("Invoice #42".to_string()),
+                None,
+            ],
+            vec![
+                Some("TBD".to_string()),
+                Some("2023-06-02".to_string()),
+                Some("Invoice #TBD".to_string()),
+                None,
+            ],
+        ];
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
     }
@@ -228,8 +259,37 @@ mod tests {
                      \tAssets:AccountsReceivable\t1337 USD\n\
                      \tIncome:Work\t1338 USD\n";
 
-        let expected_output = "1981 2023-06-02 Invoice #42";
+        let expected_output = vec![vec![
+            Some("1981".to_string()),
+            Some("2023-06-02".to_string()),
+            Some("Invoice #42".to_string()),
+            None
+        ]];
 
         assert_eq!(summarize_invoices(input.to_string()), expected_output);
+    }
+
+    #[test]
+    fn test_tabulate() {
+        let input = vec![
+            vec![
+                Some("INV-001".to_string()),
+                Some("2023-07-27".to_string()),
+                Some("Sample invoice".to_string()),
+                Some("2023-08-10".to_string()),
+            ],
+            vec![
+                Some("INV-002".to_string()),
+                Some("2023-07-28".to_string()),
+                Some("Another invoice".to_string()),
+                None, // No due date
+            ],
+        ];
+
+        let expected_output = "\
+            INV-001\t2023-07-27\tSample invoice\t2023-08-10\n\
+            INV-002\t2023-07-28\tAnother invoice\t\n";
+
+        assert_eq!(tabulate(input), expected_output);
     }
 }

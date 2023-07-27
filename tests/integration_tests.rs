@@ -70,13 +70,14 @@ fn test_that_invoice_list_shows_all_invoices() -> Result<(), Box<dyn std::error:
         .write_stdin(file_content)
         .assert();
 
+    let expected_output = "\
+        2023-001\t2023-06-01\tInvoice #1\t\n\
+        2023-002\t2023-06-02\tInvoice #2\t2023-07-02\n\
+        TBD\t2023-06-05\tInvoice #TBD\t\n";
+
     assert
         .success()
-        .stdout(predicate::str::contains("2023-001 2023-06-01 Invoice #1"))
-        .stdout(predicate::str::contains(
-            "2023-002 2023-06-02 Invoice #2 due:2023-07-02",
-        ))
-        .stdout(predicate::str::contains("TBD 2023-06-05 Invoice #TBD"));
+        .stdout(predicate::str::contains(expected_output));
 
     Ok(())
 }
