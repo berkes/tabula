@@ -9,7 +9,8 @@ use beancount_core::{
 use beancount_parser::parse;
 use beancount_render::render;
 use core::fmt;
-use std::{borrow::Cow, io::Read};
+use serde::Serialize;
+use std::{borrow::Cow, error::Error, io::Read};
 
 pub fn handle_create() -> String {
     let today: Date<'static> = chrono::Local::now().date_naive().into();
@@ -86,17 +87,112 @@ pub fn handle_build() -> String {
 }
 
 pub fn handle_list() -> String {
-    // read stdin into a String
-    let mut input = String::new();
-    std::io::stdin()
-        .read_to_string(&mut input)
-        .expect("To read input");
+    let input = read_stdin().expect("To read input");
+    let ledger = parse(&input).expect("To parse input");
 
-    let summary = summarize_invoices(input);
+    let summary = summarize_invoices(ledger);
     tabulate(summary)
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
+struct MyDate<'a>(Date<'a>);
+impl Serialize for MyDate<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+impl fmt::Display for MyDate<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_string())
+    }
+}
+
+#[derive(Serialize)]
+pub struct Invoice<'a> {
+    date: MyDate<'a>,
+    due_date: Option<MyDate<'a>>,
+    narration: String,
+    number: InvoiceNumber,
+    total: String,
+}
+
+impl<'a> From<Transaction<'a>> for Invoice<'a> {
+    fn from(tx: Transaction<'a>) -> Self {
+        let date = tx.date;
+
+        let due_date = if let Some(MetaValue::Date(due_date)) = tx.meta.get("due") {
+            Some(due_date).cloned()
+        } else {
+            None
+        };
+
+        let narration = tx.narration.to_string();
+        let number: InvoiceNumber = tx.meta.get("invoice_number").into();
+        let total = "1337 USD".to_string();
+
+        Self {
+            date: MyDate(date),
+            due_date: due_date.map(MyDate),
+            narration,
+            number,
+            total,
+        }
+    }
+}
+
+pub fn handle_convert(args: crate::cli::ConvertArgs) -> String {
+    let input = read_stdin().expect("To read input");
+    let ledger = parse(&input).expect("To parse input");
+
+    let tx = find_invoice(ledger, args.invoice_number).expect("To find invoice");
+
+    let invoice: Invoice = tx.into();
+
+    match args.format {
+        crate::cli::OutputFormat::Json => as_json(invoice),
+        crate::cli::OutputFormat::Txt => as_txt(invoice),
+        crate::cli::OutputFormat::Pdf => todo!(),
+    }
+}
+
+fn as_json(invoice: Invoice) -> String {
+    serde_json::to_string_pretty(&invoice).unwrap()
+}
+
+fn as_txt(invoice: Invoice) -> String {
+    format!(
+        r#"
+Invoice: #{}
+Date issued: {}
+Due date: {}
+Income:Work: {}
+
+{}"#,
+        invoice.number.0,
+        invoice.date.clone(),
+        invoice.due_date.unwrap_or(invoice.date),
+        invoice.total,
+        invoice.narration,
+    )
+}
+
+fn find_invoice(ledger: Ledger<'_>, invoice_number: String) -> Option<Transaction<'_>> {
+    let expected_invoice_number = InvoiceNumber(invoice_number);
+
+    let txs = find_invoices(ledger);
+    txs.into_iter().find(|tx| {
+        let possible_invoice_number: InvoiceNumber = tx.meta.get("invoice_number").unwrap().into();
+        possible_invoice_number == expected_invoice_number
+    })
+}
+
+pub fn read_stdin() -> Result<String, Box<dyn Error>> {
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+    Ok(input)
+}
+
+#[derive(Debug, PartialEq, Serialize)]
 struct InvoiceNumber(String);
 impl From<&MetaValue<'_>> for InvoiceNumber {
     fn from(mv: &MetaValue) -> Self {
@@ -108,29 +204,22 @@ impl From<&MetaValue<'_>> for InvoiceNumber {
         }
     }
 }
+impl From<Option<&MetaValue<'_>>> for InvoiceNumber {
+    fn from(mv: Option<&MetaValue>) -> Self {
+        match mv {
+            Some(mv) => InvoiceNumber::from(mv),
+            None => InvoiceNumber("TBD".to_string()),
+        }
+    }
+}
 impl fmt::Display for InvoiceNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-pub fn summarize_invoices(input: String) -> Vec<Vec<Option<String>>> {
-    let ledger = parse(&input).unwrap();
-    // keep only the directives that are transactions
-    // keep only the transactions that have an invoice_number
-    // and where the invoice_number is a Number
-    let txs: Vec<beancount_core::Transaction> = ledger
-        .directives
-        .into_iter()
-        .filter_map(|directive| {
-            if let beancount_core::Directive::Transaction(tx) = directive {
-                Some(tx)
-            } else {
-                None
-            }
-        })
-        .filter(|d| d.meta.get("invoice_number").is_some())
-        .collect();
+pub fn summarize_invoices(input: Ledger) -> Vec<Vec<Option<String>>> {
+    let txs = find_invoices(input);
 
     // format their descriptions, dates, and invoice_numbers collect in a string
     txs.into_iter()
@@ -152,6 +241,23 @@ pub fn summarize_invoices(input: String) -> Vec<Vec<Option<String>>> {
         .collect::<Vec<Vec<Option<String>>>>()
 }
 
+fn find_invoices(input: Ledger) -> Vec<beancount_core::Transaction> {
+    // keep only the directives that are transactions
+    // keep only the transactions that have an invoice_number
+    input
+        .directives
+        .into_iter()
+        .filter_map(|directive| {
+            if let beancount_core::Directive::Transaction(tx) = directive {
+                Some(tx)
+            } else {
+                None
+            }
+        })
+        .filter(|d| d.meta.get("invoice_number").is_some())
+        .collect()
+}
+
 fn tabulate(input: Vec<Vec<Option<String>>>) -> String {
     let mut output = String::new();
     let max_columns = input.iter().map(|row| row.len()).max().unwrap_or(0);
@@ -160,10 +266,10 @@ fn tabulate(input: Vec<Vec<Option<String>>>) -> String {
         for (i, col) in row.iter().enumerate() {
             output.push_str(&format!("{}", col.as_ref().unwrap_or(&"".to_string())));
             if i < max_columns - 1 {
-                output.push_str("\t");
+                output.push('\t');
             }
         }
-        output.push_str("\n");
+        output.push('\n');
     }
 
     output
@@ -200,7 +306,7 @@ mod tests {
             ],
         ];
 
-        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+        assert_eq!(summarize_invoices(parse(input).unwrap()), expected_output);
     }
 
     #[test]
@@ -217,7 +323,7 @@ mod tests {
             Some("2023-07-02".to_string()),
         ]];
 
-        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+        assert_eq!(summarize_invoices(parse(input).unwrap()), expected_output);
     }
 
     #[test]
@@ -247,7 +353,7 @@ mod tests {
             ],
         ];
 
-        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+        assert_eq!(summarize_invoices(parse(input).unwrap()), expected_output);
     }
 
     // Edge case where we have a number that is not quoted but a valid formula. E.g. 2023-42 is
@@ -263,10 +369,10 @@ mod tests {
             Some("1981".to_string()),
             Some("2023-06-02".to_string()),
             Some("Invoice #42".to_string()),
-            None
+            None,
         ]];
 
-        assert_eq!(summarize_invoices(input.to_string()), expected_output);
+        assert_eq!(summarize_invoices(parse(input).unwrap()), expected_output);
     }
 
     #[test]

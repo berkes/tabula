@@ -7,7 +7,7 @@ fn main() {
             cli::InvoiceActions::Create => invoice::handle_create(),
             cli::InvoiceActions::Build => invoice::handle_build(),
             cli::InvoiceActions::List => invoice::handle_list(),
-            _ => String::new(),
+            cli::InvoiceActions::Convert(args) => invoice::handle_convert(args),
         },
     };
     println!("{}", output);
