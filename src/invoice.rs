@@ -101,12 +101,6 @@ impl From<Option<&MetaValue<'_>>> for InvoiceNumber {
     }
 }
 
-impl fmt::Display for InvoiceNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Clone)]
 pub struct MyDate<'a>(Date<'a>);
 impl From<&str> for MyDate<'_> {
