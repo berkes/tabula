@@ -64,26 +64,9 @@ pub fn handle_create() -> String {
 }
 
 pub fn handle_build() -> String {
-    let today: Date<'static> = chrono::Local::now().date_naive().into();
+    let invoice = Invoice::default();
 
-    format!(
-        r#"
-        {{
-            "to": "",
-            "description": "",
-            "created_on": "{}",
-            "invoice_number": "TBD",
-            "line_items": [
-                {{
-                  "description": "",
-                  "amount": 0,
-                  "unit_price": 65.00,
-                  "vat_percentage": 21
-                }}
-            ]
-        }}"#,
-        today,
-    )
+    serde_json::to_string_pretty(&invoice).unwrap()
 }
 
 pub fn handle_list() -> String {
@@ -114,6 +97,18 @@ pub struct Invoice<'a> {
     narration: String,
     number: InvoiceNumber,
     total: String,
+}
+
+impl Default for Invoice<'_> {
+    fn default() -> Self {
+        Self {
+            date: MyDate(chrono::Local::now().date_naive().into()),
+            due_date: None,
+            narration: String::default(),
+            number: InvoiceNumber("TBD".to_string()),
+            total: "1337 USD".to_string(),
+        }
+    }
 }
 
 impl<'a> From<Transaction<'a>> for Invoice<'a> {

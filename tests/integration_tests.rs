@@ -39,33 +39,20 @@ fn test_that_invoice_create_outputs_to_sdout() -> Result<(), Box<dyn std::error:
 #[test]
 fn test_that_invoice_build_generates_template_json() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("tabula")?;
-    let assert = cmd.arg("invoices").arg("build").assert();
+    let out = cmd.arg("invoices").arg("build").unwrap().stdout;
+    let actual: serde_json::Value = serde_json::from_slice(&out).unwrap();
 
-    let expected = format!(
-        r#"
-        {{
-            "to": "",
-            "description": "",
-            "created_on": "{}",
-            "invoice_number": "TBD",
-            "line_items": [
-                {{
-                  "description": "",
-                  "amount": 0,
-                  "unit_price": 65.00,
-                  "vat_percentage": 21
-                }}
-            ]
-        }}"#,
-        today(),
+    let expected = json!(
+        {
+            "narration": "",
+            "date": today(),
+            "due_date": None::<String>,
+            "number": "TBD",
+            "total": "1337 USD",
+        }
     );
-    let expected_json: serde_json::Value = serde_json::from_str(&expected)?;
 
-    let binding = assert.success();
-    let actual = std::str::from_utf8(&binding.get_output().stdout)?;
-    let actual_json: serde_json::Value = serde_json::from_str(actual)?;
-
-    assert_eq!(expected_json, actual_json);
+    assert_json_eq!(expected, actual);
 
     Ok(())
 }
