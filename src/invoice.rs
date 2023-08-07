@@ -12,6 +12,8 @@ use core::fmt;
 use serde::Serialize;
 use std::{borrow::Cow, error::Error, io::Read};
 
+use crate::output::Output;
+
 pub fn handle_create() -> String {
     let today: Date<'static> = chrono::Local::now().date_naive().into();
 
@@ -77,13 +79,49 @@ pub fn handle_list() -> String {
     tabulate(summary)
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+pub struct InvoiceNumber(pub String);
+impl From<&MetaValue<'_>> for InvoiceNumber {
+    fn from(mv: &MetaValue) -> Self {
+        match mv {
+            MetaValue::Text(s) => InvoiceNumber(s.to_string()),
+            MetaValue::Currency(s) => InvoiceNumber(s.to_string()),
+            MetaValue::Number(n) => InvoiceNumber(n.to_string()),
+            _ => panic!("Expected a text value"),
+        }
+    }
+}
+
+impl From<Option<&MetaValue<'_>>> for InvoiceNumber {
+    fn from(mv: Option<&MetaValue>) -> Self {
+        match mv {
+            Some(mv) => InvoiceNumber::from(mv),
+            None => InvoiceNumber("TBD".to_string()),
+        }
+    }
+}
+
+impl fmt::Display for InvoiceNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone)]
-struct MyDate<'a>(Date<'a>);
+pub struct MyDate<'a>(Date<'a>);
+impl From<&str> for MyDate<'_> {
+    fn from(value: &str) -> Self {
+        let date = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap();
+        MyDate(date.into())
+    }
+}
+
 impl Serialize for MyDate<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.0.to_string())
     }
 }
+
 impl fmt::Display for MyDate<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.to_string())
@@ -92,11 +130,11 @@ impl fmt::Display for MyDate<'_> {
 
 #[derive(Serialize)]
 pub struct Invoice<'a> {
-    date: MyDate<'a>,
-    due_date: Option<MyDate<'a>>,
-    narration: String,
-    number: InvoiceNumber,
-    total: String,
+    pub date: MyDate<'a>,
+    pub due_date: Option<MyDate<'a>>,
+    pub narration: String,
+    pub number: InvoiceNumber,
+    pub total: String,
 }
 
 impl Default for Invoice<'_> {
@@ -144,31 +182,10 @@ pub fn handle_convert(args: crate::cli::ConvertArgs) -> String {
     let invoice: Invoice = tx.into();
 
     match args.format {
-        crate::cli::OutputFormat::Json => as_json(invoice),
-        crate::cli::OutputFormat::Txt => as_txt(invoice),
+        crate::cli::OutputFormat::Json => invoice.as_json(),
+        crate::cli::OutputFormat::Txt => invoice.as_txt(),
         crate::cli::OutputFormat::Pdf => todo!(),
     }
-}
-
-fn as_json(invoice: Invoice) -> String {
-    serde_json::to_string_pretty(&invoice).unwrap()
-}
-
-fn as_txt(invoice: Invoice) -> String {
-    format!(
-        r#"
-Invoice: #{}
-Date issued: {}
-Due date: {}
-Income:Work: {}
-
-{}"#,
-        invoice.number.0,
-        invoice.date.clone(),
-        invoice.due_date.unwrap_or(invoice.date),
-        invoice.total,
-        invoice.narration,
-    )
 }
 
 fn find_invoice(ledger: Ledger<'_>, invoice_number: String) -> Option<Transaction<'_>> {
@@ -185,32 +202,6 @@ pub fn read_stdin() -> Result<String, Box<dyn Error>> {
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input)?;
     Ok(input)
-}
-
-#[derive(Debug, PartialEq, Serialize)]
-struct InvoiceNumber(String);
-impl From<&MetaValue<'_>> for InvoiceNumber {
-    fn from(mv: &MetaValue) -> Self {
-        match mv {
-            MetaValue::Text(s) => InvoiceNumber(s.to_string()),
-            MetaValue::Currency(s) => InvoiceNumber(s.to_string()),
-            MetaValue::Number(n) => InvoiceNumber(n.to_string()),
-            _ => panic!("Expected a text value"),
-        }
-    }
-}
-impl From<Option<&MetaValue<'_>>> for InvoiceNumber {
-    fn from(mv: Option<&MetaValue>) -> Self {
-        match mv {
-            Some(mv) => InvoiceNumber::from(mv),
-            None => InvoiceNumber("TBD".to_string()),
-        }
-    }
-}
-impl fmt::Display for InvoiceNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
 }
 
 pub fn summarize_invoices(input: Ledger) -> Vec<Vec<Option<String>>> {

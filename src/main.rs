@@ -1,5 +1,6 @@
 mod cli;
 mod invoice;
+mod output;
 
 fn main() {
     let output = match cli::parse().command {
