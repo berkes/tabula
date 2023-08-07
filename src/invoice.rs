@@ -123,12 +123,21 @@ impl fmt::Display for MyDate<'_> {
 }
 
 #[derive(Serialize)]
+pub struct LineItem {
+    pub description: String,
+    pub unit_price: String,
+    pub quantity: String,
+    pub total: String,
+}
+
+#[derive(Serialize)]
 pub struct Invoice<'a> {
     pub date: MyDate<'a>,
     pub due_date: Option<MyDate<'a>>,
     pub narration: String,
     pub number: InvoiceNumber,
     pub total: String,
+    pub line_items: Vec<LineItem>,
 }
 
 impl Default for Invoice<'_> {
@@ -139,6 +148,7 @@ impl Default for Invoice<'_> {
             narration: String::default(),
             number: InvoiceNumber("TBD".to_string()),
             total: "1337 USD".to_string(),
+            line_items: vec![],
         }
     }
 }
@@ -157,12 +167,33 @@ impl<'a> From<Transaction<'a>> for Invoice<'a> {
         let number: InvoiceNumber = tx.meta.get("invoice_number").into();
         let total = "1337 USD".to_string();
 
+        let line_items: Vec<LineItem> = tx
+            .postings
+            .iter()
+            .filter(|p| p.meta.get("line_item_name").is_some())
+            .map(|p| {
+                let description = if let Some(MetaValue::Text(description)) = p.meta.get("line_item_name") {
+                    description.to_string()
+                } else {
+                    panic!("Expected a text value");
+                };
+
+                LineItem {
+                    description,
+                    unit_price: "13.37 USD".to_string(),
+                    quantity: "100".to_string(),
+                    total: "1337 USD".to_string(),
+                }
+            })
+            .collect();
+
         Self {
             date: MyDate(date),
             due_date: due_date.map(MyDate),
             narration,
             number,
             total,
+            line_items,
         }
     }
 }

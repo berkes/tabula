@@ -1,5 +1,6 @@
 use core::fmt;
 use std::fmt::Display;
+use prettytable::{Table, Row, Cell};
 
 use crate::invoice::{Invoice, InvoiceNumber};
 
@@ -31,7 +32,24 @@ impl Display for Invoice<'_> {
         renderer.add_field("Income:Work", &self.total);
         let meta = renderer.to_string();
 
-        write!(f, "{}\n{}", meta, self.narration)
+        // If there are line-items, render them to a table with prettytable
+        if !self.line_items.is_empty() {
+            let mut table = Table::new();
+            table.add_row(Row::new(vec![Cell::new("Name"), Cell::new("Qty"), Cell::new("Unit price"), Cell::new("Amount")]));
+            for line_item in &self.line_items {
+                table.add_row(Row::new(vec![
+                    Cell::new(&line_item.description),
+                    Cell::new(&line_item.quantity),
+                    Cell::new(&line_item.unit_price),
+                    Cell::new(&line_item.total),
+                ]));
+            }
+            write!(f, "{}\n{}\n{}", meta, table, self.narration)?;
+            return Ok(());
+        } else {
+            write!(f, "{}\n{}", meta, self.narration)?;
+            return Ok(());
+        }
     }
 }
 
@@ -72,9 +90,10 @@ impl<'a> fmt::Display for KeyValueRenderer<'a> {
 #[cfg(test)]
 mod tests {
     use assert_json_diff::assert_json_eq;
+    use pretty_assertions::assert_eq;
     use serde_json::json;
 
-    use crate::invoice::InvoiceNumber;
+    use crate::invoice::{InvoiceNumber, LineItem};
 
     use super::*;
 
@@ -86,6 +105,7 @@ mod tests {
             narration: "Invoice #2".to_string(),
             number: InvoiceNumber("2023-002".to_string()),
             total: "1337 USD".to_string(),
+            line_items: vec![],
         };
 
         let actual = serde_json::from_str::<serde_json::Value>(&invoice.as_json()).unwrap();
@@ -96,7 +116,8 @@ mod tests {
                 "due_date": "2023-07-02",
                 "narration": "Invoice #2",
                 "number": "2023-002",
-                "total": "1337 USD"
+                "total": "1337 USD",
+                "line_items": []
             }
         );
 
@@ -111,6 +132,7 @@ mod tests {
             narration: "Invoice #2".to_string(),
             number: InvoiceNumber("2023-002".to_string()),
             total: "1337 USD".to_string(),
+            line_items: vec![],
         };
 
         let actual = invoice.as_txt();
@@ -122,5 +144,39 @@ Income:Work: 1337 USD
 
 Invoice #2"#;
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_as_txt_has_line_item_table() {
+        let mut invoice = Invoice {
+            date: "2023-06-02".into(),
+            due_date: Some("2023-07-02".into()),
+            narration: "Invoice #2".to_string(),
+            number: InvoiceNumber("2023-002".to_string()),
+            total: "1337 USD".to_string(),
+            line_items: vec![],
+        };
+
+        invoice.line_items.push(LineItem {
+            description: "Uren".to_string(),
+            quantity: "65".to_string(),
+            unit_price: "65".to_string(),
+            total: "1337 USD".to_string(),
+        });
+
+        let expected = r#"Invoice: 2023-002
+Date issued: 2023-06-02
+Due date: 2023-07-02
+Income:Work: 1337 USD
+
++------+-----+------------+----------+
+| Name | Qty | Unit price | Amount   |
++------+-----+------------+----------+
+| Uren | 65  | 65         | 1337 USD |
++------+-----+------------+----------+
+
+Invoice #2"#;
+
+        assert_eq!(expected, invoice.as_txt());
     }
 }

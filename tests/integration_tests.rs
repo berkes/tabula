@@ -3,6 +3,7 @@ use assert_json_diff::assert_json_eq;
 // Run programs
 use chrono::Local; // Allows to fetch local dates to match against
 use predicates::prelude::*;
+use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize}; // Allows to deserialize JSON
 use serde_json::json; // Allows easier asssertions
 use std::{fs::File, io::Read}; // Runs programs
@@ -49,6 +50,7 @@ fn test_that_invoice_build_generates_template_json() -> Result<(), Box<dyn std::
             "due_date": None::<String>,
             "number": "TBD",
             "total": "1337 USD",
+            "line_items": []
         }
     );
 
@@ -105,7 +107,7 @@ fn test_that_invoice_convert_converts_to_json() -> Result<(), Box<dyn std::error
             "due_date": "2023-07-02",
             "narration": "Invoice #2",
             "number": "2023-002",
-            "total": "1337 USD"
+            "total": "1337 USD",
         }
     );
 
@@ -118,7 +120,7 @@ fn test_that_invoice_convert_converts_to_json() -> Result<(), Box<dyn std::error
 
 #[test]
 fn test_that_invoice_convert_converts_to_txt() -> Result<(), Box<dyn std::error::Error>> {
-    // Open the fxiture and read its contents into a String
+    // Open the fixture and read its contents into a String
     let mut file_content = String::new();
     File::open("./tests/fixtures/invoices.beancount")?.read_to_string(&mut file_content)?;
 
@@ -130,19 +132,24 @@ fn test_that_invoice_convert_converts_to_txt() -> Result<(), Box<dyn std::error:
         .arg("txt")
         .arg("--invoice-number")
         .arg("2023-002")
-        .write_stdin(file_content)
-        .assert();
+        .write_stdin(file_content);
 
-    let expected_output = r#"
-Invoice: #2023-002
+    let expected_output = r#"Invoice: 2023-002
 Date issued: 2023-06-02
 Due date: 2023-07-02
 Income:Work: 1337 USD
 
++------------------------+-----+------------+----------+
+| Name                   | Qty | Unit price | Amount   |
++------------------------+-----+------------+----------+
+| Work done on project X | 100 | 13.37 USD  | 1337 USD |
++------------------------+-----+------------+----------+
+
 Invoice #2
 "#;
 
-    assert.success().stdout(expected_output);
+    let actual = String::from_utf8(assert.unwrap().stdout).unwrap();
+    assert_eq!(expected_output, actual);
 
     Ok(())
 }

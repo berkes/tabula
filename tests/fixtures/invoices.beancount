@@ -7,6 +7,9 @@
  	invoice_number: "2023-002"
   due: 2023-07-02
 	Assets:AccountsReceivable	1337 USD
+    line_item_name: "Work done on project X"
+    line_item_quantity: 100
+    line_item_unit_price: 13.37
 	Income:Work	1337 USD
 
 2023-06-05 ! "Invoice #TBD"
