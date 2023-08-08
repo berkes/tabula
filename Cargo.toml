@@ -4,10 +4,6 @@ version = "0.1.0"
 edition = "2021"
 default-run = "tabula"
 
-[[bin]]
-name = "poc-ledger"
-path = "src/poc_ledger.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
