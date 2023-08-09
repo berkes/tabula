@@ -18,9 +18,36 @@ pub struct Invoice {
 }
 
 #[test]
-fn test_that_invoice_create_outputs_to_sdout() -> Result<(), Box<dyn std::error::Error>> {
+fn test_that_invoice_build_renders_text() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("tabula")?;
-    let assert = cmd.arg("invoices").arg("create").assert();
+    let out = cmd
+        .args(&["--format", "txt"]) // --format txt is default, but we provide it explicitly here
+        .arg("invoices")
+        .arg("build")
+        .unwrap()
+        .stdout;
+
+    let expected_output = r#"Invoice: TBD
+Date issued: 2023-08-10
+Due date: 2023-08-10
+Income:Work: 1337 USD
+
+
+"#;
+
+    assert_eq!(expected_output, String::from_utf8(out).unwrap());
+
+    Ok(())
+}
+
+#[test]
+fn test_that_invoice_build_renders_ledger() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::cargo_bin("tabula")?;
+    let assert = cmd
+        .args(&["--format", "beancount"])
+        .arg("invoices")
+        .arg("build")
+        .assert();
 
     assert
         .success()
@@ -40,7 +67,14 @@ fn test_that_invoice_create_outputs_to_sdout() -> Result<(), Box<dyn std::error:
 #[test]
 fn test_that_invoice_build_generates_template_json() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("tabula")?;
-    let out = cmd.arg("invoices").arg("build").unwrap().stdout;
+
+    let out = cmd
+        .args(&["--format", "json"])
+        .arg("invoices")
+        .arg("build")
+        .unwrap()
+        .stdout;
+
     let actual: serde_json::Value = serde_json::from_slice(&out).unwrap();
 
     let expected = json!(
@@ -70,17 +104,21 @@ fn test_that_invoice_list_shows_all_invoices() -> Result<(), Box<dyn std::error:
         .arg("invoices")
         .arg("list")
         .write_stdin(file_content)
-        .assert();
+        .unwrap()
+        .stdout;
 
-    let expected_output = "\
-        2023-001\t2023-06-01\tInvoice #1\t\n\
-        2023-002\t2023-06-02\tInvoice #2\t2023-07-02\n\
-        TBD\t2023-06-05\tInvoice #TBD\t\n";
+    let expected_output = r#"+----------+------------+--------------+------------+
+| Number   | Date       | Narration    | Due date   |
++----------+------------+--------------+------------+
+| 2023-001 | 2023-06-01 | Invoice #1   |            |
++----------+------------+--------------+------------+
+| 2023-002 | 2023-06-02 | Invoice #2   | 2023-07-02 |
++----------+------------+--------------+------------+
+| TBD      | 2023-06-05 | Invoice #TBD |            |
++----------+------------+--------------+------------+
 
-    assert
-        .success()
-        .stdout(predicate::str::contains(expected_output));
-
+"#;
+    assert_eq!(expected_output, String::from_utf8(assert).unwrap());
     Ok(())
 }
 
@@ -91,12 +129,10 @@ fn test_that_invoice_convert_converts_to_json() -> Result<(), Box<dyn std::error
 
     let mut cmd = Command::cargo_bin("tabula")?;
     let out = cmd
+        .args(&["--format", "json"])
         .arg("invoices")
         .arg("convert")
-        .arg("--format")
-        .arg("json")
-        .arg("--invoice-number")
-        .arg("2023-002")
+        .args(&["--invoice-number", "2023-002"])
         .write_stdin(file_content)
         .unwrap()
         .stdout;
@@ -126,10 +162,9 @@ fn test_that_invoice_convert_converts_to_txt() -> Result<(), Box<dyn std::error:
 
     let mut cmd = Command::cargo_bin("tabula")?;
     let assert = cmd
+        .args(&["--format", "txt"])
         .arg("invoices")
         .arg("convert")
-        .arg("--format")
-        .arg("txt")
         .arg("--invoice-number")
         .arg("2023-002")
         .write_stdin(file_content);

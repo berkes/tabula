@@ -6,6 +6,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Namespace,
+
+    /// The format to convert to
+    #[arg(long, default_value = "txt")]
+    pub format: OutputFormat,
 }
 
 impl Cli {}
@@ -23,7 +27,6 @@ pub struct InvoicesArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum InvoiceActions {
-    Create,
     List,
     /// Converts to --format of an invoice in a ledger
     Convert(ConvertArgs),
@@ -36,14 +39,11 @@ pub enum InvoiceActions {
 pub enum OutputFormat {
     Json,
     Txt,
-    Pdf,
+    Beancount,
 }
 
 #[derive(Debug, Args)]
 pub struct ConvertArgs {
-    /// The format to convert to
-    #[arg(long)]
-    pub format: OutputFormat,
     /// The invoice number. If multiple invoices are found, the first one is used.
     #[arg(long)]
     pub invoice_number: String,

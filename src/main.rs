@@ -1,15 +1,13 @@
-mod cli;
-mod invoice;
-mod output;
+mod adapters;
+mod commands;
+mod domain;
+mod services;
 
-fn main() {
-    let output = match cli::parse().command {
-        cli::Namespace::Invoices(invoices_args) => match invoices_args.command {
-            cli::InvoiceActions::Create => invoice::handle_create(),
-            cli::InvoiceActions::Build => invoice::handle_build(),
-            cli::InvoiceActions::List => invoice::handle_list(),
-            cli::InvoiceActions::Convert(args) => invoice::handle_convert(args),
-        },
-    };
-    println!("{}", output);
+use adapters::{cli::CliAdapter, InputAdapter};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cli = CliAdapter::default();
+    cli.run()?;
+    println!("{}", cli.get_response());
+    Ok(())
 }
