@@ -27,13 +27,16 @@ fn test_that_invoice_build_renders_text() -> Result<(), Box<dyn std::error::Erro
         .unwrap()
         .stdout;
 
-    let expected_output = r#"Invoice: TBD
-Date issued: 2023-08-10
-Due date: 2023-08-10
+    let expected_output = format!(
+        r#"Invoice: TBD
+Date issued: {}
+Due date: 
 Income:Work: 1337 USD
 
 
-"#;
+"#,
+        today()
+    );
 
     assert_eq!(expected_output, String::from_utf8(out).unwrap());
 

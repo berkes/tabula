@@ -185,7 +185,11 @@ impl Output for InvoiceList {
 impl Display for Invoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let owned_date = self.date.clone();
-        let owned_due_date = self.due_date.as_ref().unwrap_or(&self.date);
+        let owned_due_date = if let Some(due_date) = self.due_date.clone() {
+            due_date.to_string()
+        } else {
+            "".to_string()
+        };
         let owned_number = self.number.0.clone();
 
         let mut renderer = KeyValueRenderer::new();
